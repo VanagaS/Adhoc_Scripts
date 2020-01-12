@@ -1,0 +1,28 @@
+default menu.c32
+prompt 0
+timeout 300
+ONTIMEOUT local
+menu title ######### Private PXE Boot Menu #########
+label 1
+menu label ^1) Install CentOS 7 x64 with Local Repo
+kernel centos7/vmlinuz
+append initrd=centos7/initrd.img method=ftp://10.10.225.229/pub devfs=nomount
+label 2
+menu label ^2) Install CentOS 7 x64 with Local Repo & Kickstart
+kernel centos7/vmlinuz
+append initrd=centos7/initrd.img method=ftp://10.10.225.229/pub devfs=nomount ks=ftp://10.10.225.229/pub/kickstart/hardened-ks.cfg
+label 3
+menu label ^3) Install CentOS 7 x64 with mirror.centos.org Repo
+kernel centos7/vmlinuz
+append initrd=centos/initrd.img method=http://mirror.centos.org/cento/7/os/x86_64 devfs=nomount ip=dhcp
+label 4
+menu label ^4) Install CentOS 7 x64 with Local Repo using VNC
+kernel centos7/vmlinuz
+append initrd=centos7/initrd.img method=ftp://10.10.225.229/pub devfs=nomount inst.vnc inst.vncpassword=private_password
+label 5
+menu label ^5) Boot from local drive
+label 6
+menu label ^6) Install Hardened CentOS 7 x64 with Local Repo & Kickstart
+kernel centos7-hardened/vmlinuz
+append initrd=centos7-hardened/initrd.img method=ftp://10.10.225.229/pub/CentOS_Hardened devfs=nomount ks=ftp://10.10.225.229/pub/CentOS_Hardened/hardening/hardened-centos.cfg
+
