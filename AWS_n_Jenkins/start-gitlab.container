@@ -1,0 +1,13 @@
+#!/bin/bash
+
+. environment
+
+/usr/bin/sudo /usr/bin/docker run --detach \
+  --hostname $HOSTNAME \
+  --publish 443:443 --publish 80:80 --publish 23:23 \
+  --name ${NAME}.gitlab \
+  --restart always \
+  --volume $PATH/gitlab/config:/etc/gitlab \
+  --volume $PATH/gitlab/logs:/var/log/gitlab \
+  --volume $PATH/gitlab/data:/var/opt/gitlab \
+  gitlab/gitlab-ce:latest

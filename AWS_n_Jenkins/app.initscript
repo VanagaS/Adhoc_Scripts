@@ -1,0 +1,58 @@
+#!/bin/bash
+# description: theApphq start stop restart
+# processname: theApphq
+# chkconfig: 35 20 99
+
+JAVA_HOME=/app_data/java/jdk-11.0.2/
+PROD_HOME=/app_data/production/
+THE_APP=theApphq.jar
+DEPLOY_PORT=443
+
+function start {
+    if pkill -0 -f $THE_APP > /dev/null 2>&1
+    then
+        echo "Service $THE_APP is already running"
+        return 0
+    fi
+    echo "Starting theApphq..."
+    echo "$JAVA_HOME/bin/java -Dserver.port=${DEPLOY_PORT} -jar $PROD_HOME/app/$THE_APP"
+    nohup $JAVA_HOME/bin/java -Dserver.port=${DEPLOY_PORT} -jar $PROD_HOME/app/$THE_APP < /dev/null > $PROD_HOME/logs/startup.log 2>&1 &
+}
+
+function stop {
+    if ! pkill -0 -f $THE_APP > /dev/null 2>&1
+    then
+        echo "Service $THE_APP is not running." 
+        return 0
+    fi
+
+    # first try using spring-boot-actuator to do a graceful shutdown
+    curl -k -X POST https://localhost:$DEPLOY_PORT/shutdown < /dev/null > /dev/null 2>&1
+
+    loop=0
+    while pkill -0 -f $THE_APP > /dev/null 2>&1
+    do
+        let loop=loop+1
+        if [ $loop -gt 5 ]
+        then
+	    echo "Graceful shutdown failed after 5secs. Force killing running process..."
+            pkill -f $THE_APP > /dev/null 2>&1
+            return 0
+        fi
+        sleep 1s
+    done
+}
+
+case $1 in
+start)
+    start
+;;
+stop)
+    stop
+;;
+restart)
+    stop
+    start
+;;
+esac
+exit 0

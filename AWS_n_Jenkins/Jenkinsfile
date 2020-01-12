@@ -1,0 +1,109 @@
+// Pipeline script to automate deployments with SonarQube integration
+//
+// Aditya Naga Sanjeevi, Yellapu
+//
+pipeline {
+  environment {
+    IMAGE = readMavenPom(file: "theApp-service/pom.xml").getArtifactId()
+    VERSION = readMavenPom(file: "theApp-service/pom.xml").getVersion()
+    PORT = 9991 // Port available: 9991...9999. Specifying port here dedicates this port for this particular branch
+    BRANCH = "${env.BRANCH_NAME}"
+    SCANNER_HOME = tool 'theApphq-sonarscanner-3.3'
+    SONAR_COMMAND = "${SCANNER_HOME}/bin/sonar-scanner -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.sourceEncoding=UTF-8 -Dsonar.java.source=11 -Dsonar.java.binaries=**/target/classes -Dsonar.java.libraries=**/target -Dsonar.java.coveragePlugin=jacoco -Djacoco.version='0.7.2.201409121644' -Dsonar-jacoco-listeners.version='1.4' -Djacoco.out.ut.file=jacoco-ut.exec -Djacoco.out.it.file=jacoco-it.exec -Dsonar.dynamicAnalysis=reuseReports -Dsonar.java.codeCoveragePlugin=jacoco "
+  }
+
+  agent any
+
+  options {
+    timestamps()
+  }
+
+  stages {
+
+    stage('Bui1d') {
+      // initiate findbugs using Pipeline plugin 
+      steps {
+        withMaven(maven: 'Maven.3.6.0', options: [findbugsPublisher(), junitPublisher(ignoreAttachments: false)]) {
+          sh 'mvn -f theApp-service/pom.xml clean install test surefire:test -Djacoco.outputDir=${WORKSPACE}/target'
+        }
+      }
+    }
+
+    // stage('Quality Analysis') {
+
+      //parallel {
+
+        stage('Sonar Scan - theApp Repository') {
+          steps {
+            withSonarQubeEnv('theApphq-sonarqube-server') {
+              script {
+                APP_KEY = "theApp-repository"
+                SONAR_EXT_COMMAND = "-Dsonar.projectKey=theApphq-${APP_KEY}-${BRANCH} -Dsonar.projectName=${APP_KEY}-${BRANCH} -Dsonar.sources=theApp-service/${APP_KEY}/src -Dsonar.junit.reportPaths=theApp-service/${APP_KEY}/target/surefire-reports"
+                sh "${SONAR_COMMAND} ${SONAR_EXT_COMMAND}"
+              }
+            }
+          }
+        }
+
+        stage('Sonar Scan - theApp Common Library') {
+          steps {
+            withSonarQubeEnv('theApphq-sonarqube-server') {
+              script {
+                APP_KEY = "theApp-common-library"
+                SONAR_EXT_COMMAND = "-Dsonar.projectKey=theApphq-${APP_KEY}-${BRANCH} -Dsonar.projectName=${APP_KEY}-${BRANCH} -Dsonar.sources=theApp-service/${APP_KEY}/src -Dsonar.junit.reportPaths=theApp-service/${APP_KEY}/target/surefire-reports"
+                sh "${SONAR_COMMAND} ${SONAR_EXT_COMMAND}"
+              }
+            }
+          }
+        }
+
+        stage('Sonar Scan - theApp Services') {
+          steps {
+            withSonarQubeEnv('theApphq-sonarqube-server') {
+              script {
+                APP_KEY = "theApp-services"
+                SONAR_EXT_COMMAND = "-Dsonar.projectKey=theApphq-${APP_KEY}-${BRANCH} -Dsonar.projectName=${APP_KEY}-${BRANCH} -Dsonar.sources=theApp-service/${APP_KEY}/src -Dsonar.junit.reportPaths=theApp-service/${APP_KEY}/target/surefire-reports -Djacoco.outputDir=theApp-service/${APP_KEY}/target/ -Dsonar.jacoco.reportPath=theApp-service/${APP_KEY}/target/coverage-reports/jacoco-ut.exec -Dsonar.surefire.reportsPath=theApp-service/${APP_KEY}/target/surefire-reports -Dsonar.coverage.exclusions='**/ServiceAuthenticationFilter.*'"
+                sh "${SONAR_COMMAND} ${SONAR_EXT_COMMAND}"
+              }
+            }
+          }
+        }
+
+        stage('Sonar Scan - theApp External Library') {
+          steps {
+            withSonarQubeEnv('theApphq-sonarqube-server') {
+              script {
+                APP_KEY = "external-library"
+                SONAR_EXT_COMMAND = "-Dsonar.projectKey=theApphq-${APP_KEY}-${BRANCH} -Dsonar.projectName=${APP_KEY}-${BRANCH} -Dsonar.sources=theApp-service/${APP_KEY}/src -Dsonar.junit.reportPaths=theApp-service/${APP_KEY}/target/surefire-reports"
+                sh "${SONAR_COMMAND} ${SONAR_EXT_COMMAND}"
+              }
+            }
+          }
+        } 
+
+      //} // Parallel
+
+    //}  // Quality Analysis
+
+    stage('Install') {
+      steps {
+        // initiate findbugs using Pipeline plugin 
+        withMaven(maven: 'Maven.3.6.0', options: [findbugsPublisher(), junitPublisher(ignoreAttachments: false)]) {
+          sh 'mvn -f theApp-service/pom.xml install'
+        }
+      }
+    }
+
+    stage('Deploy') {
+      steps {
+        sh "/sbin/fuser -k -n tcp ${PORT} || ! netstat -ntl | grep ${PORT}"
+        withMaven(maven: 'Maven.3.6.0') {
+          // sh 'java -Dserver.port=${PORT} -jar theApp-service/theApp-services/target/theApp-services-${VERSION}-${IMAGE}.jar'
+          sh 'java -Dserver.port=${PORT} -jar theApp-service/theApp-services/target/theApp-services-${VERSION}.jar'
+        }
+      }
+    }
+
+  } // Stages
+
+}
